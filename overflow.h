@@ -18,6 +18,7 @@
 #ifndef OVERFLOW_H
 #define OVERFLOW_H
 
+#include <stdbool.h>
 #include "elf.h"
 
 static inline bool waddOverflow(Elf32_Word h, Elf32_Word i, Elf32_Word *result)

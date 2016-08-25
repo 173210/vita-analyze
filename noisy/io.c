@@ -17,18 +17,18 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "io.h"
+#include "lib.h"
 
-struct safeFile {
+struct noisyFile {
 	FILE * restrict file;
 	const char * restrict path;
 };
 
-struct safeFile *safeGetStdout()
+struct noisyFile *noisyGetStdout()
 {
-	struct safeFile * const context = malloc(sizeof(*context));
-	if (context == NULL) {
-		perror (NULL);
-	} else {
+	struct noisyFile * const context = noisyMalloc(sizeof(*context));
+	if (context != NULL) {
 		context->file = stdout;
 		context->path = "stdout";
 	}
@@ -36,13 +36,11 @@ struct safeFile *safeGetStdout()
 	return context;
 }
 
-struct safeFile *safeFopen(const char * restrict path,
-			 const char * restrict mode)
+struct noisyFile *noisyFopen(const char * restrict path,
+			   const char * restrict mode)
 {
-	struct safeFile * const context = malloc(sizeof(*context));
-	if (context == NULL) {
-		perror(NULL);
-	} else {
+	struct noisyFile * const context = noisyMalloc(sizeof(*context));
+	if (context != NULL) {
 		context->file = fopen (path, mode);
 		if (context->file == NULL) {
 			perror(path);
@@ -56,7 +54,7 @@ struct safeFile *safeFopen(const char * restrict path,
 	return context;
 }
 
-int safeFclose(struct safeFile * restrict context)
+int noisyFclose(struct noisyFile * restrict context)
 {
 	int result;
 
@@ -72,7 +70,7 @@ int safeFclose(struct safeFile * restrict context)
 	return result;
 }
 
-int safeFseek(const struct safeFile * restrict context, long offset, int whence)
+int noisyFseek(const struct noisyFile * restrict context, long offset, int whence)
 {
 	const int result = fseek(context->file, offset, whence);
 	if (result != 0)
@@ -81,7 +79,7 @@ int safeFseek(const struct safeFile * restrict context, long offset, int whence)
 	return result;
 }
 
-long safeFtell(const struct safeFile * restrict context)
+long noisyFtell(const struct noisyFile * restrict context)
 {
 	const long result = ftell(context->file);
 	if (result < 0)
@@ -90,8 +88,8 @@ long safeFtell(const struct safeFile * restrict context)
 	return result;
 }
 
-size_t safeFread(void * restrict buffer, size_t size, size_t number,
-		 const struct safeFile * restrict context)
+size_t noisyFread(void * restrict buffer, size_t size, size_t number,
+		 const struct noisyFile * restrict context)
 {
 	const size_t result = fread(buffer, size, number, context->file);
 	if (result != number) {
@@ -105,8 +103,8 @@ size_t safeFread(void * restrict buffer, size_t size, size_t number,
 	return result;
 }
 
-size_t safeFwrite(const void * restrict buffer, size_t size, size_t number,
-	const struct safeFile * restrict context)
+size_t noisyFwrite(const void * restrict buffer, size_t size, size_t number,
+	const struct noisyFile * restrict context)
 {
 	const size_t result = fwrite(buffer, size, number, context->file);
 	if (result != number)
@@ -115,7 +113,7 @@ size_t safeFwrite(const void * restrict buffer, size_t size, size_t number,
 	return result;
 }
 
-int safeFputc(int c, const struct safeFile * restrict context)
+int noisyFputc(int c, const struct noisyFile * restrict context)
 {
 	const int result = putc(c, context->file);
 	if (result != c)

@@ -14,7 +14,10 @@
 
    You should have received a copy of the GNU Lesser General Public
    License along with the GNU C Library; if not, see
-   <http://www.gnu.org/licenses/>.  */
+   <http://www.gnu.org/licenses/>.
+
+   This file is ported to vita-analyze by 173210.
+   Copyright (C) 2016  173210 <root.3.173210@live.com>  */
 
 #ifndef _ELF_H
 #define	_ELF_H 1

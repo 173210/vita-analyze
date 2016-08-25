@@ -9,8 +9,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#ifndef INFO_H
-#define INFO_H
+#ifndef ELF_INFO_H
+#define ELF_INFO_H
+
+#include "elf.h"
 
 /* Sce types */
 typedef Elf32_Word SceUInt;

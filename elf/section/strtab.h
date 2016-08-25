@@ -15,42 +15,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ELFDRIVER_H
-#define ELFDRIVER_H
+#ifndef ELF_SECTION_STRTAB_H
+#define ELF_SECTION_STRTAB_H
 
-#include <stdint.h>
-#include "elf.h"
+#include "../elf.h"
 
-struct elfExp {
-	Elf32_Half size;
-	uint8_t version[2];
-	Elf32_Half attribute;
-	Elf32_Half nFuncs;
-	Elf32_Word nVars;
-	Elf32_Word unknown;
-	Elf32_Word moduleNid;
-	Elf32_Addr name;
-	Elf32_Addr nids;
-	Elf32_Addr entries;
+struct elfSectionStrtab {
+	char * restrict buffer;
+	Elf32_Word size;
 };
 
-struct elfImp {
-	Elf32_Half size;
-	Elf32_Half version;
-	Elf32_Half attribute;
-	Elf32_Half nFuncs;
-	Elf32_Half nVars;
-	Elf32_Half nTls;
-	Elf32_Word unknown0;
-	Elf32_Word nid;
-	Elf32_Addr name;
-	Elf32_Word unknown1;
-	Elf32_Addr funcNids;
-	Elf32_Addr funcEntries;
-	Elf32_Addr varNids;
-	Elf32_Addr varEntries;
-	Elf32_Addr tlsNids;
-	Elf32_Addr tlsEntries;
-};
+void elfSectionStrtabInit(struct elfSectionStrtab * restrict context);
+
+int elfSectionStrtabAdd(Elf32_Word * restrict index,
+			struct elfSectionStrtab * restrict context,
+			Elf32_Word n, const char * restrict f, ...);
+
+void elfSectionStrtabFinalize(const struct elfSectionStrtab * restrict context,
+			      Elf32_Shdr * restrict shdr,
+			      void ** restrict buffer,
+			      Elf32_Word name, Elf32_Off offset);
 
 #endif
