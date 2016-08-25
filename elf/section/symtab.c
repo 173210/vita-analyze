@@ -125,6 +125,23 @@ failOverflow:
 	return -1;
 }
 
+static int notypeSymMake(Elf32_Sym * restrict sym,
+			  struct elfSectionStrtab * restrict strtab)
+{
+	const int result = elfSectionStrtabAdd(
+		&sym->st_name, strtab, sizeof(""), "");
+	if (result < 0)
+		return result;
+
+	sym->st_value = 0;
+	sym->st_size = 0;
+	sym->st_info = ELF32_ST_INFO(STB_LOCAL, STT_NOTYPE);
+	sym->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
+	sym->st_shndx = SHN_UNDEF;
+
+	return 0;
+}
+
 static int infoSymMake(Elf32_Addr vaddr, Elf32_Sym * restrict sym,
 			     struct elfSectionStrtab * restrict strtab)
 {
@@ -137,7 +154,7 @@ static int infoSymMake(Elf32_Addr vaddr, Elf32_Sym * restrict sym,
 	sym->st_size = sizeof(SceModuleInfo);
 	sym->st_info = ELF32_ST_INFO(STB_GLOBAL, STT_OBJECT);
 	sym->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-	sym->st_shndx = 0;
+	sym->st_shndx = ELF_LOADNDX;
 
 	return 0;
 }
@@ -183,7 +200,7 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 			name = "null";
 			nameSize = sizeof("null");
 		} else {
-			name = elfImageVaddrToPtr(image, cursor->name,
+			name = elfImageVaddrToPtr(image, cursor->name, 0,
 						  &nameSize);
 			if (name == NULL)
 				goto failNamePtr;
@@ -206,23 +223,15 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		if (wmulOverflow(total, 4, &words))
 			goto failTooMany;
 
-		Elf32_Word nidsMax;
 		const Elf32_Word *nid =
-			elfImageVaddrToPtr(image, cursor->nids, &nidsMax);
+			elfImageVaddrToPtr(image, cursor->nids, words, NULL);
 		if (nid == NULL)
 			goto failNidsPtr;
 
-		if (nidsMax < words)
-			goto failTooMany;
-
-		Elf32_Word entriesMax;
 		const Elf32_Word *entry =
-			elfImageVaddrToPtr(image, cursor->entries, &entriesMax);
+			elfImageVaddrToPtr(image, cursor->entries, words, NULL);
 		if (entry == NULL)
 			goto failEntriesPtr;
-
-		if (entriesMax < words)
-			goto failTooMany;
 
 		for (Elf32_Half count = 0;
 		     count < cursor->nFuncs;
@@ -252,7 +261,13 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 			syms->st_info = ELF32_ST_INFO(
 				STB_GLOBAL, guessSttFunc(*entry));
 			syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-			syms->st_shndx = 0;
+
+			Elf32_Word phndx;
+			if (elfImageGetPhndxByVaddr(image, *entry, 0,
+						    &phndx, NULL))
+				syms->st_shndx = SHN_ABS;
+			else
+				syms->st_shndx = ELF_LOADNDX + phndx;
 
 			syms++;
 			nid++;
@@ -286,7 +301,13 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 			syms->st_size = 4;
 			syms->st_info = ELF32_ST_INFO(STB_GLOBAL, STT_OBJECT);
 			syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-			syms->st_shndx = 0;
+
+			Elf32_Word phndx;
+			if (elfImageGetPhndxByVaddr(image, *entry, 4,
+						    &phndx, NULL))
+				syms->st_shndx = SHN_ABS;
+			else
+				syms->st_shndx = ELF_LOADNDX + phndx;
 
 			syms++;
 			nid++;
@@ -324,9 +345,10 @@ failStrtab:
 	return result;
 }
 
-static int kernelInfoSymMake(const SceKernelModuleInfo *kernelInfo,
-		    Elf32_Sym * restrict syms,
-		    struct elfSectionStrtab * restrict strtab)
+static int kernelInfoSymMake(const struct elfImage * restrict image,
+			     const SceKernelModuleInfo * restrict kernelInfo,
+			     Elf32_Sym * restrict syms,
+			     struct elfSectionStrtab * restrict strtab)
 {
 	int result;
 
@@ -342,7 +364,14 @@ static int kernelInfoSymMake(const SceKernelModuleInfo *kernelInfo,
 		syms->st_info = ELF32_ST_INFO(
 			STB_GLOBAL, guessSttFunc(kernelInfo->module_start));
 		syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-		syms->st_shndx = 0;
+
+		Elf32_Word phndx;
+		if (elfImageGetPhndxByVaddr(image, kernelInfo->module_start, 0,
+					    &phndx, NULL))
+			syms->st_shndx = SHN_ABS;
+		else
+			syms->st_shndx = ELF_LOADNDX + phndx;
+
 		syms++;
 	}
 
@@ -358,7 +387,13 @@ static int kernelInfoSymMake(const SceKernelModuleInfo *kernelInfo,
 		syms->st_info = ELF32_ST_INFO(
 			STB_GLOBAL, guessSttFunc(kernelInfo->module_stop));
 		syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-		syms->st_shndx = 0;
+
+		Elf32_Word phndx;
+		if (elfImageGetPhndxByVaddr(image, kernelInfo->module_stop, 0,
+					    &phndx, NULL))
+			syms->st_shndx = SHN_ABS;
+		else
+			syms->st_shndx = ELF_LOADNDX + phndx;
 	}
 
 	return 0;
@@ -386,28 +421,16 @@ static int makeTable(const struct elfImage * restrict image,
 		goto fail;
 	}
 
-	Elf32_Word nidsMax;
-	const Elf32_Word *nid = elfImageVaddrToPtr(image, nids, &nidsMax);
+	const Elf32_Word *nid = elfImageVaddrToPtr(image, nids, words, NULL);
 	if (nid == NULL) {
 		error = "nid table is not located in file";
 		goto fail;
 	}
 
-	if (nidsMax < words) {
-		error = "nid table doesn't fit in file";
-		goto fail;
-	}
-
-	Elf32_Word entriesMax;
 	const Elf32_Word *entry
-		= elfImageVaddrToPtr(image, entries, &entriesMax);
+		= elfImageVaddrToPtr(image, entries, words, NULL);
 	if (entry == NULL) {
 		error = "entry table is not located in file";
-		goto fail;
-	}
-
-	if (entriesMax < words) {
-		error = "entry table doesn't fit in file";
 		goto fail;
 	}
 
@@ -428,7 +451,13 @@ static int makeTable(const struct elfImage * restrict image,
 		syms->st_size = st_size;
 		syms->st_info = ELF32_ST_INFO(STB_GLOBAL, stt);
 		syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-		syms->st_shndx = 0;
+
+		Elf32_Word phndx;
+		if (elfImageGetPhndxByVaddr(image, *entry, st_size,
+					    &phndx, NULL))
+			syms->st_shndx = SHN_ABS;
+		else
+			syms->st_shndx = ELF_LOADNDX + phndx;
 
 		syms++;
 		nid++;
@@ -466,7 +495,7 @@ static int impSymMake(const struct elfImageImp * restrict imp,
 			name = "null";
 			nameSize = sizeof("null");
 		} else {
-			name = elfImageVaddrToPtr(image, cursor->name,
+			name = elfImageVaddrToPtr(image, cursor->name, 0,
 						  &nameSize);
 			if (name == NULL)
 				goto failNamePtr;
@@ -523,13 +552,13 @@ failTable:
 	return -1;
 }
 
-int elfSectionSymtabMake(Elf32_Shdr * restrict shdr,
-			 void ** restrict buffer,
-			 const struct elfImage * restrict image,
+int elfSectionSymtabMake(const struct elfImage * restrict image,
 			 const SceKernelModuleInfo * restrict kernelInfo,
 			 struct elfSectionStrtab * restrict strtab,
 			 Elf32_Word strtabIndex,
-			 Elf32_Word name, Elf32_Off offset)
+			 Elf32_Word name, Elf32_Off offset,
+			 Elf32_Shdr * restrict shdr,
+			 void ** restrict buffer)
 {
 	struct elfImageExp exp;
 	struct elfImageImp imp;
@@ -555,19 +584,21 @@ int elfSectionSymtabMake(Elf32_Shdr * restrict shdr,
 	shdr->sh_flags = 0;
 	shdr->sh_addr = 0;
 	shdr->sh_link = strtabIndex;
+	shdr->sh_info = 1;
 	shdr->sh_addralign = 4;
 	shdr->sh_entsize = sizeof(Elf32_Sym);
 
-	if (waddOverflow(1, kernelInfoSymSum, &shdr->sh_info))
+	Elf32_Word nSyms;
+	if (waddOverflow(2, kernelInfoSymSum, &nSyms))
 		goto failTooMany;
 
-	if (waddOverflow(shdr->sh_info, expSum, &shdr->sh_info))
+	if (waddOverflow(nSyms, expSum, &nSyms))
 		goto failTooMany;
 
-	if (waddOverflow(shdr->sh_info, impSum, &shdr->sh_info))
+	if (waddOverflow(nSyms, impSum, &nSyms))
 		goto failTooMany;
 
-	if (wmulOverflow(shdr->sh_info, shdr->sh_entsize, &shdr->sh_size))
+	if (wmulOverflow(nSyms, shdr->sh_entsize, &shdr->sh_size))
 		goto failTooMany;
 
 	const Elf32_Off mod = offset % shdr->sh_addralign;
@@ -584,12 +615,17 @@ int elfSectionSymtabMake(Elf32_Shdr * restrict shdr,
 
 	Elf32_Sym *cursor = syms;
 
+	result = notypeSymMake(cursor, strtab);
+	if (result < 0)
+		goto failSym;
+
+	cursor++;
 	result = infoSymMake(info, cursor, strtab);
 	if (result < 0)
 		goto failSym;
 
 	cursor++;
-	result = kernelInfoSymMake(kernelInfo, cursor, strtab);
+	result = kernelInfoSymMake(image, kernelInfo, cursor, strtab);
 	if (result < 0)
 		goto failSym;
 

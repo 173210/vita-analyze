@@ -53,10 +53,12 @@ int elfImageRead(struct elfImage * restrict image, const char * restrict path);
 int elfImageValidate(const struct elfImage * restrict image);
 
 Elf32_Off elfImageVaddrToOff(const struct elfImage * restrict image,
-			     Elf32_Addr vaddr, Elf32_Word * restrict size);
+			     Elf32_Addr vaddr, Elf32_Word size,
+			     Elf32_Word * restrict max);
 
 const void *elfImageVaddrToPtr(const struct elfImage * restrict image,
-			       Elf32_Addr vaddr, Elf32_Word * restrict size);
+			       Elf32_Addr vaddr, Elf32_Word size,
+			       Elf32_Word * restrict max);
 
 static inline const void *elfImageOffToPtr(
 	const struct elfImage * restrict image, Elf32_Off offset)
@@ -64,10 +66,9 @@ static inline const void *elfImageOffToPtr(
 	return (char *)image->buffer + offset;
 }
 
-Elf32_Sword elfImageExpSum(const struct elfImageExp * restrict exp,
-			   const struct elfImage * restrict image);
-
-Elf32_Sword elfImageImpSum(const struct elfImageImp * restrict imp,
-			   const struct elfImage * restrict image);
+int elfImageGetPhndxByVaddr(const struct elfImage * restrict image,
+			    Elf32_Addr vaddr, Elf32_Word size,
+			    Elf32_Word * restrict result,
+			    Elf32_Word * restrict max);
 
 #endif

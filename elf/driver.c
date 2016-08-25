@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,8 +23,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../noisy/io.h"
+#include "../noisy/lib.h"
 #include "../overflow.h"
 #include "../readwhole.h"
+#include "section/load.h"
 #include "section/null.h"
 #include "section/strtab.h"
 #include "section/symtab.h"
@@ -66,20 +69,33 @@ int elfInit(struct elf * restrict context, const char * restrict path)
 		result = elfImageValidate(&context->source);
 		if (result != 0)
 			free(context->source.buffer);
+
+		context->shnum = 0;
 	}
 
 	return result;
 }
 
+
 int elfMakeSections(struct elf * restrict context,
 		    const char * restrict infoPath)
 {
+	enum {
+		ELF_SH_NULL,
+		ELF_SH_LOAD,
+		ELF_SH_SHSTRTAB,
+		ELF_SH_SYMTAB,
+		ELF_SH_STRTAB,
+		ELF_SH_NUM
+	};
+
 #define NAME(string) { string, sizeof(string) }
 	static struct {
 		const char *string;
 		size_t size;
 	} names[ELF_SH_NUM] = {
 		[ELF_SH_NULL] = NAME(""),
+		[ELF_SH_LOAD] = NAME("load"),
 		[ELF_SH_SHSTRTAB] = NAME(".shstrtab"),
 		[ELF_SH_SYMTAB] = NAME(".symtab"),
 		[ELF_SH_STRTAB] = NAME(".strtab")
@@ -87,7 +103,29 @@ int elfMakeSections(struct elf * restrict context,
 	struct elfSectionStrtab shstrtab;
 	struct elfSectionStrtab strtab;
 	Elf32_Word shstrtabNames[ELF_SH_NUM];
+	Elf32_Word num;
 	int result;
+
+	const Elf32_Word loads = elfSectionLoadCount(&context->source);
+
+	if (waddOverflow(loads, 4, &num))
+		goto failTooMany;
+
+	Elf32_Word shsize;
+	if (wmulOverflow(num, sizeof(*context->shdrs), &shsize))
+		goto failTooMany;
+
+	Elf32_Word tabSize;
+	if (wmulOverflow(num, sizeof(*context->sections), &tabSize))
+		goto failTooMany;
+
+	Elf32_Shdr * const shdrs = noisyMalloc(shsize);
+	if (shdrs == NULL)
+		goto failShdrs;
+
+	void ** const sections = noisyMalloc(tabSize);
+	if (sections == NULL)
+		goto failSections;
 
 	elfSectionStrtabInit(&shstrtab);
 
@@ -96,18 +134,24 @@ int elfMakeSections(struct elf * restrict context,
 					     names[index].size,
 					     names[index].string);
 		if (result < 0)
-			return result;
+			goto failShstrtab;
 	}
 
-	elfSectionNullMake(context->shdrs + ELF_SH_NULL,
-			   shstrtabNames[ELF_SH_NULL]);
+	Elf32_Word ndx = 0;
 
-	elfSectionStrtabFinalize(
-		&shstrtab, context->shdrs + ELF_SH_SHSTRTAB,
-		context->sections + ELF_SH_SHSTRTAB,
-		shstrtabNames[ELF_SH_SHSTRTAB],
-		context->source.size + sizeof(context->shdrs));
+	elfSectionNullMake(shstrtabNames[ELF_SH_NULL],
+			   shdrs + ndx, sections + ndx);
 
+	ndx++;
+	assert(ndx == ELF_LOADNDX);
+	elfSectionLoadMake(&context->source, shstrtabNames[ELF_SH_LOAD],
+			   shdrs + ndx, sections + ndx);
+
+	ndx += loads;
+	elfSectionStrtabFinalize(&shstrtab, shstrtabNames[ELF_SH_SHSTRTAB],
+				 context->source.size + shsize,
+				 shdrs + ndx, sections + ndx);
+	context->shstrndx = ndx;
 
 	elfSectionStrtabInit(&strtab);
 
@@ -115,22 +159,44 @@ int elfMakeSections(struct elf * restrict context,
 	if (info == NULL)
 		return -1;
 
-	result = elfSectionSymtabMake(
-		context->shdrs + ELF_SH_SYMTAB,
-		context->sections + ELF_SH_SYMTAB,
-		&context->source, info, &strtab, ELF_SH_STRTAB,
-		shstrtabNames[ELF_SH_SYMTAB],
-		context->shdrs[ELF_SH_SHSTRTAB].sh_offset
-		+ context->shdrs[ELF_SH_SHSTRTAB].sh_size);
+	ndx++;
+	result = elfSectionSymtabMake(&context->source, info, &strtab, ndx + 1,
+				      shstrtabNames[ELF_SH_SYMTAB],
+				      shdrs[ndx - 1].sh_offset
+				      + shdrs[ndx - 1].sh_size,
+				      shdrs + ndx, sections + ndx);
+	if (result != 0)
+		goto failSymtab;
 
 	free(info);
 
-	elfSectionStrtabFinalize(&strtab, context->shdrs + ELF_SH_STRTAB,
-				 context->sections + ELF_SH_STRTAB,
+	ndx++;
+	elfSectionStrtabFinalize(&strtab,
 				 shstrtabNames[ELF_SH_STRTAB],
-				 context->shdrs[ELF_SH_SYMTAB].sh_offset
-				 + context->shdrs[ELF_SH_SYMTAB].sh_size);
+				 shdrs[ndx - 1].sh_offset
+				 + shdrs[ndx - 1].sh_size,
+				 shdrs + ndx, sections + ndx);
 
+	context->shdrs = shdrs;
+	context->sections = sections;
+	context->shnum = ndx + 1;
+
+	return result;
+
+failTooMany:
+	fputs("too many sections", stderr);
+	return -1;
+
+failSections:
+	free(shdrs);
+failShdrs:
+	return -1;
+
+failSymtab:
+	free(info);
+failShstrtab:
+	free(sections);
+	free(shdrs);
 	return result;
 }
 
@@ -139,10 +205,14 @@ int elfWrite(struct elf *context)
 	Elf32_Ehdr ehdr;
 
 	memcpy(&ehdr, context->source.buffer, sizeof(ehdr));
+
+	/* BFD doesn't accept sections if e_type is ET_CORE. */
+	ehdr.e_type = ET_NONE;
+
 	ehdr.e_shoff = context->source.size;
 	ehdr.e_shentsize = sizeof(Elf32_Shdr);
-	ehdr.e_shnum = ELF_SH_NUM;
-	ehdr.e_shstrndx = ELF_SH_SHSTRTAB;
+	ehdr.e_shnum = context->shnum;
+	ehdr.e_shstrndx = context->shstrndx;
 
 	struct noisyFile *noisyStdout = noisyGetStdout();
 	if (noisyStdout == NULL)
@@ -155,13 +225,13 @@ int elfWrite(struct elf *context)
 		       context->source.size - sizeof(ehdr), 1, noisyStdout) != 1)
 		goto fail;
 
-	if (noisyFwrite(context->shdrs, sizeof(context->shdrs), 1, noisyStdout)
-	    != 1)
+	const Elf32_Word shsize = context->shnum * sizeof(*context->shdrs);
+	if (noisyFwrite(context->shdrs, shsize, 1, noisyStdout) != 1)
 		goto fail;
 
-	Elf32_Off offset = context->source.size + sizeof(context->shdrs);
-	for (Elf32_Word index = 0; index < ELF_SH_NUM; index++) {
-		if (context->shdrs[index].sh_size <= 0)
+	Elf32_Off offset = context->source.size + shsize;
+	for (Elf32_Word index = 0; index < context->shnum; index++) {
+		if (context->sections[index] == NULL)
 			continue;
 
 		while (offset < context->shdrs[index].sh_offset) {
@@ -190,5 +260,13 @@ failInit:
 
 void elfDeinit(const struct elf * restrict context)
 {
+	if (context->shnum > 0) {
+		for (Elf32_Word ndx = 0; ndx < context->shnum; ndx++)
+			free(context->sections[ndx]);
+
+		free(context->shdrs);
+		free(context->sections);
+	}
+
 	free(context->source.buffer);
 }

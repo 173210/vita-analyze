@@ -20,6 +20,7 @@
 
 #include "../elf.h"
 
-void elfSectionNullMake(Elf32_Shdr * restrict shdr, Elf32_Word name);
+void elfSectionNullMake(Elf32_Word name,
+			Elf32_Shdr * restrict shdr, void ** restrict section);
 
 #endif

@@ -57,9 +57,9 @@ int elfSectionStrtabAdd(Elf32_Word * restrict index,
 }
 
 void elfSectionStrtabFinalize(const struct elfSectionStrtab * restrict context,
+			      Elf32_Word name, Elf32_Off offset,
 			      Elf32_Shdr * restrict shdr,
-			      void ** restrict buffer,
-			      Elf32_Word name, Elf32_Off offset)
+			      void ** restrict buffer)
 {
 	shdr->sh_name = name;
 	shdr->sh_type = SHT_STRTAB;

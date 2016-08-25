@@ -22,12 +22,12 @@
 #include "../info.h"
 #include "strtab.h"
 
-int elfSectionSymtabMake(Elf32_Shdr * restrict shdr,
-			 void ** restrict buffer,
-			 const struct elfImage * restrict image,
-			 const SceKernelModuleInfo * restrict info,
+int elfSectionSymtabMake(const struct elfImage * restrict image,
+			 const SceKernelModuleInfo * restrict kernelInfo,
 			 struct elfSectionStrtab * restrict strtab,
 			 Elf32_Word strtabIndex,
-			 Elf32_Word name, Elf32_Off offset);
+			 Elf32_Word name, Elf32_Off offset,
+			 Elf32_Shdr * restrict shdr,
+			 void ** restrict buffer);
 
 #endif

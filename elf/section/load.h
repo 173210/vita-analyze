@@ -15,23 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stddef.h>
+#ifndef ELF_SECTION_LOAD_H
+#define ELF_SECTION_LOAD_H
+
 #include "../elf.h"
-#include "null.h"
+#include "../image.h"
 
-void elfSectionNullMake(Elf32_Word name,
-			Elf32_Shdr * restrict shdr, void ** restrict section)
-{
-	shdr->sh_name = name;
-	shdr->sh_type = SHT_NULL;
-	shdr->sh_flags = 0;
-	shdr->sh_addr = 0;
-	shdr->sh_offset = 0;
-	shdr->sh_size = 0;
-	shdr->sh_link = 0;
-	shdr->sh_info = 0;
-	shdr->sh_addralign = 0;
-	shdr->sh_entsize = 0;
+Elf32_Word elfSectionLoadCount(struct elfImage * restrict image);
 
-	*section = NULL;
-}
+void elfSectionLoadMake(struct elfImage * restrict image, Elf32_Word name,
+			Elf32_Shdr * restrict shdr, void ** restrict section);
+
+#endif

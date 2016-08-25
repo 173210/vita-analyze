@@ -22,6 +22,8 @@
 #include "image.h"
 #include "elf.h"
 
+#define ELF_LOADNDX 1
+
 struct elfExp {
 	Elf32_Half size;
 	uint8_t version[2];
@@ -54,18 +56,12 @@ struct elfImp {
 	Elf32_Addr tlsEntries;
 };
 
-enum {
-	ELF_SH_NULL,
-	ELF_SH_SHSTRTAB,
-	ELF_SH_SYMTAB,
-	ELF_SH_STRTAB,
-	ELF_SH_NUM
-};
-
 struct elf {
-	Elf32_Shdr shdrs[ELF_SH_NUM];
-	void *sections[ELF_SH_NUM];
+	Elf32_Shdr *shdrs;
+	void **sections;
 	struct elfImage source;
+	Elf32_Word shnum;
+	Elf32_Word shstrndx;
 };
 
 int elfInit(struct elf * restrict context, const char * restrict path);

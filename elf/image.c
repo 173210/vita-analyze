@@ -191,7 +191,8 @@ int elfImageValidate(const struct elfImage * restrict image)
 
 	if (result == 0) {
 		if (ehdr->e_phnum > (image->size - ehdr->e_phoff)
-				    / sizeof(Elf32_Phdr)) {
+				    / sizeof(Elf32_Phdr)
+		    || ehdr->e_phnum == PN_XNUM) {
 			fprintf(stderr, "%s: too many program headers\n",
 				image->path);
 			result = -1;
@@ -206,7 +207,8 @@ int elfImageValidate(const struct elfImage * restrict image)
 }
 
 Elf32_Off elfImageVaddrToOff(const struct elfImage * restrict image,
-			     Elf32_Addr vaddr, Elf32_Word * restrict size)
+			     Elf32_Addr vaddr, Elf32_Word size,
+			     Elf32_Word * restrict max)
 {
 	const void * const buffer = image->buffer;
 	const Elf32_Ehdr * const ehdr = buffer;
@@ -215,22 +217,63 @@ Elf32_Off elfImageVaddrToOff(const struct elfImage * restrict image,
 	const Elf32_Phdr * const phdrsBtm = phdrsTop + ehdr->e_phnum;
 
 	for (const Elf32_Phdr *phdr = phdrsTop; phdr != phdrsBtm; phdr++) {
-		Elf32_Word topOff;
-		if (wsubOverflow(vaddr, phdr->p_vaddr, &topOff))
+		Elf32_Word offset;
+		if (wsubOverflow(vaddr, phdr->p_vaddr, &offset))
 			continue;
 
-		if (wsubOverflow(phdr->p_filesz, topOff, size))
+		Elf32_Word localMax;
+		if (wsubOverflow(phdr->p_filesz, offset, &localMax))
 			continue;
 
-		return phdr->p_offset + topOff;
+		if (localMax < size)
+			continue;
+
+		if (max != NULL)
+			*max = localMax;
+
+		return phdr->p_offset + offset;
 	}
 
 	return 0;
 }
 
 const void *elfImageVaddrToPtr(const struct elfImage * restrict image,
-			       Elf32_Addr vaddr, Elf32_Word * restrict size)
+			       Elf32_Addr vaddr, Elf32_Word size,
+			       Elf32_Word * restrict max)
 {
-	const Elf32_Off offset = elfImageVaddrToOff(image, vaddr, size);
+	const Elf32_Off offset = elfImageVaddrToOff(image, vaddr, size, max);
 	return offset > 0 ? elfImageOffToPtr(image, offset) : NULL;
+}
+
+int elfImageGetPhndxByVaddr(const struct elfImage * restrict image,
+			    Elf32_Addr vaddr, Elf32_Word size,
+			    Elf32_Word * restrict result,
+			    Elf32_Word * restrict max)
+{
+	const void * const buffer = image->buffer;
+	const Elf32_Ehdr * const ehdr = buffer;
+	const Elf32_Phdr * const phdrs
+		= (void *)((char *)buffer + ehdr->e_phoff);
+
+	for (Elf32_Word ndx = 0; ndx < ehdr->e_phnum; ndx++) {
+		Elf32_Word offset;
+		if (wsubOverflow(vaddr, phdrs[ndx].p_vaddr, &offset))
+			continue;
+
+		Elf32_Word localMax;
+		if (wsubOverflow(phdrs[ndx].p_filesz, offset, &localMax))
+			continue;
+
+		if (localMax < size)
+			continue;
+
+		*result = ndx;
+
+		if (max != NULL)
+			*max = localMax;
+
+		return 0;
+	}
+
+	return -1;
 }
