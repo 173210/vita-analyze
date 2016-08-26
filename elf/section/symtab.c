@@ -69,41 +69,6 @@ static Elf32_Sword impSymSumUp(const struct elfImageImp * restrict imp,
 	for (const struct elfImp *cursor = imp->top;
 	     cursor != imp->btm;
 	     cursor = (void *)((char *)cursor + cursor->size)) {
-		/* TODO: DEBUG */
-		fprintf(stderr,
-			"size: %u\n"
-			"version: 0x%04X\n"
-			"attribute: 0x%04X\n"
-			"nFuncs: 0x%04X\n"
-			"nVars: 0x%04X\n"
-			"nTls: 0x%04X\n"
-			"unknown0: 0x%08X\n"
-			"nid: 0x%08X\n"
-			"name: 0x%08X\n"
-			"unknown1: 0x%08X\n"
-			"funcNids: 0x%08X\n"
-			"funcEntries: 0x%08X\n"
-			"varNids: 0x%08X\n"
-			"varEntries: 0x%08X\n"
-			"tlsNids: 0x%08X\n"
-			"tlsEntries: 0x%08X\n",
-			cursor->size,
-			cursor->version,
-			cursor->attribute,
-			cursor->nFuncs,
-			cursor->nVars,
-			cursor->nTls,
-			cursor->unknown0,
-			cursor->nid,
-			cursor->name,
-			cursor->unknown1,
-			cursor->funcNids,
-			cursor->funcEntries,
-			cursor->varNids,
-			cursor->varEntries,
-			cursor->tlsNids,
-			cursor->tlsEntries);
-
 		if (waddOverflow(sum, cursor->nFuncs, &sum))
 			goto failOverflow;
 
