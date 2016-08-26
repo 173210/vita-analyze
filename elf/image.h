@@ -66,4 +66,9 @@ static inline const void *elfImageOffToPtr(
 	return (char *)image->buffer + offset;
 }
 
+int elfImageGetPhndxByVaddr(const struct elfImage * restrict image,
+			    Elf32_Addr vaddr, Elf32_Word size,
+			    Elf32_Word * restrict result,
+			    Elf32_Word * restrict max);
+
 #endif

@@ -15,25 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ELF_SECTION_STRTAB_H
-#define ELF_SECTION_STRTAB_H
+#ifndef ELF_SECTION_LOAD_H
+#define ELF_SECTION_LOAD_H
 
 #include "../elf.h"
+#include "../image.h"
 
-struct elfSectionStrtab {
-	char * restrict buffer;
-	Elf32_Word size;
-};
+Elf32_Word elfSectionLoadCount(struct elfImage * restrict image);
 
-void elfSectionStrtabInit(struct elfSectionStrtab * restrict context);
-
-int elfSectionStrtabAdd(Elf32_Word * restrict index,
-			struct elfSectionStrtab * restrict context,
-			Elf32_Word n, const char * restrict f, ...);
-
-void elfSectionStrtabFinalize(const struct elfSectionStrtab * restrict context,
-			      Elf32_Word name, Elf32_Off offset,
-			      Elf32_Shdr * restrict shdr,
-			      void ** restrict buffer);
+void elfSectionLoadMake(struct elfImage * restrict image, Elf32_Word name,
+			Elf32_Shdr * restrict shdr, void ** restrict section);
 
 #endif
