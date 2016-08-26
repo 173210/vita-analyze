@@ -555,7 +555,7 @@ failTable:
 int elfSectionSymtabMake(const struct elfImage * restrict image,
 			 const SceKernelModuleInfo * restrict kernelInfo,
 			 struct elfSectionStrtab * restrict strtab,
-			 Elf32_Word strtabIndex,
+			 Elf32_Word strtabNdx,
 			 Elf32_Word name, Elf32_Off offset,
 			 Elf32_Shdr * restrict shdr,
 			 void ** restrict buffer)
@@ -583,7 +583,7 @@ int elfSectionSymtabMake(const struct elfImage * restrict image,
 	shdr->sh_type = SHT_SYMTAB;
 	shdr->sh_flags = 0;
 	shdr->sh_addr = 0;
-	shdr->sh_link = strtabIndex;
+	shdr->sh_link = strtabNdx;
 	shdr->sh_info = 1;
 	shdr->sh_addralign = 4;
 	shdr->sh_entsize = sizeof(Elf32_Sym);

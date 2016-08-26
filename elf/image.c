@@ -40,10 +40,10 @@ int elfImageFindInfo(const struct elfImage * restrict image,
 		return -1;
 	}
 
-	for (Elf32_Word index = 0;
-	     index < phdr->p_filesz - sizeof(SceModuleInfo);
-	     index += 4) {
-		const SceModuleInfo * const info = (void *)(segment + index);
+	for (Elf32_Word ndx = 0;
+	     ndx < phdr->p_filesz - sizeof(SceModuleInfo);
+	     ndx += 4) {
+		const SceModuleInfo * const info = (void *)(segment + ndx);
 
 		if (strcmp(info->name, kernelInfo->module_name) != 0)
 			continue;
@@ -54,7 +54,7 @@ int elfImageFindInfo(const struct elfImage * restrict image,
 			continue;
 
 		/* Make a guess that exports are right after SceModuleInfo. */
-		const Elf32_Word expTopOff = index + sizeof(SceModuleInfo);
+		const Elf32_Word expTopOff = ndx + sizeof(SceModuleInfo);
 
 		Elf32_Word expBtmOff;
 		if (waddOverflow(expTopOff, expSize, &expBtmOff))
@@ -88,7 +88,7 @@ int elfImageFindInfo(const struct elfImage * restrict image,
 		const struct elfImp * const impBtm
 			= (void *)(segment + impBtmOff);
 
-		*infoVaddr = phdr->p_vaddr + index;
+		*infoVaddr = phdr->p_vaddr + ndx;
 
 		exp->top = expTop;
 		exp->btm = expBtm;
@@ -121,14 +121,14 @@ static int validatePhdr(const struct elfImage * restrict image)
 	const Elf32_Phdr *phdr = (void *)((char *)buffer + ehdr->e_phoff);
 	int result = 0;
 
-	for (Elf32_Word index = 0; index < ehdr->e_phnum; index++) {
+	for (Elf32_Word ndx = 0; ndx < ehdr->e_phnum; ndx++) {
 		if (phdr->p_offset > image->size) {
 			fprintf(stderr, "%s: segment %u offset %u is out of range\n",
-				image->path, index, phdr->p_offset);
+				image->path, ndx, phdr->p_offset);
 			result = -1;
 		} else if (phdr->p_filesz > image->size - phdr->p_offset) {
 			fprintf(stderr, "%s: segment %u too large\n",
-				image->path, index);
+				image->path, ndx);
 			result = -1;
 		}
 	}

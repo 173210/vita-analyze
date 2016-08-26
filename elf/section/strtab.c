@@ -28,7 +28,7 @@ void elfSectionStrtabInit(struct elfSectionStrtab * restrict context)
 	context->size = 0;
 }
 
-int elfSectionStrtabAdd(Elf32_Word * restrict index,
+int elfSectionStrtabAdd(Elf32_Word * restrict ndx,
 			struct elfSectionStrtab * restrict context,
 			Elf32_Word n, const char * restrict f, ...)
 {
@@ -49,7 +49,7 @@ int elfSectionStrtabAdd(Elf32_Word * restrict index,
 		return result;
 	}
 
-	*index = context->size;
+	*ndx = context->size;
 	context->buffer = new;
 	context->size = newSize;
 

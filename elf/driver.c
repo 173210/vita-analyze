@@ -80,7 +80,7 @@ int elfInit(struct elf * restrict context, const char * restrict path)
 int elfMakeSections(struct elf * restrict context,
 		    const char * restrict infoPath)
 {
-	enum {
+	enum shnames {
 		ELF_SH_NULL,
 		ELF_SH_LOAD,
 		ELF_SH_SHSTRTAB,
@@ -129,10 +129,10 @@ int elfMakeSections(struct elf * restrict context,
 
 	elfSectionStrtabInit(&shstrtab);
 
-	for (unsigned int index = 0; index < ELF_SH_NUM; index++) {
-		result = elfSectionStrtabAdd(&shstrtabNames[index], &shstrtab,
-					     names[index].size,
-					     names[index].string);
+	for (enum shnames ndx = 0; ndx < ELF_SH_NUM; ndx++) {
+		result = elfSectionStrtabAdd(&shstrtabNames[ndx], &shstrtab,
+					     names[ndx].size,
+					     names[ndx].string);
 		if (result < 0)
 			goto failShstrtab;
 	}
@@ -230,23 +230,23 @@ int elfWrite(struct elf *context)
 		goto fail;
 
 	Elf32_Off offset = context->source.size + shsize;
-	for (Elf32_Word index = 0; index < context->shnum; index++) {
-		if (context->sections[index] == NULL)
+	for (Elf32_Word ndx = 0; ndx < context->shnum; ndx++) {
+		if (context->sections[ndx] == NULL)
 			continue;
 
-		while (offset < context->shdrs[index].sh_offset) {
+		while (offset < context->shdrs[ndx].sh_offset) {
 			if (noisyFputc(0, noisyStdout) != 0)
 				goto fail;
 
 			offset++;
 		}
 
-		if (noisyFwrite(context->sections[index],
-				context->shdrs[index].sh_size, 1, noisyStdout)
+		if (noisyFwrite(context->sections[ndx],
+				context->shdrs[ndx].sh_size, 1, noisyStdout)
 		    != 1)
 			goto fail;
 
-		offset += context->shdrs[index].sh_size;
+		offset += context->shdrs[ndx].sh_size;
 	}
 
 	noisyFclose(noisyStdout);

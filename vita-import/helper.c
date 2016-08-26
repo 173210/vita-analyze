@@ -38,9 +38,9 @@ vita_imports_t *vitaImportsLoad()
 vita_imports_lib_t *vitaImportsFindLibByName(vita_imports_t * restrict imp,
 					     const char *name)
 {
-	for (int index = 0; index < imp->n_libs; index++)
-		if (strcmp(imp->libs[index]->name, name) == 0)
-			return imp->libs[index];
+	for (int ndx = 0; ndx < imp->n_libs; ndx++)
+		if (strcmp(imp->libs[ndx]->name, name) == 0)
+			return imp->libs[ndx];
 
 	return NULL;
 }
@@ -48,9 +48,9 @@ vita_imports_lib_t *vitaImportsFindLibByName(vita_imports_t * restrict imp,
 vita_imports_module_t *vitaImportsFindModuleInAll(vita_imports_t * restrict imp,
 						  uint32_t nid)
 {
-	for (int index = 0; index < imp->n_libs; index++) {
+	for (int ndx = 0; ndx < imp->n_libs; ndx++) {
 		vita_imports_module_t * const module
-			= vita_imports_find_module(imp->libs[index], nid);
+			= vita_imports_find_module(imp->libs[ndx], nid);
 		if (module != NULL)
 			return module;
 	}

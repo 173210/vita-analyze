@@ -27,7 +27,7 @@ struct elfSectionStrtab {
 
 void elfSectionStrtabInit(struct elfSectionStrtab * restrict context);
 
-int elfSectionStrtabAdd(Elf32_Word * restrict index,
+int elfSectionStrtabAdd(Elf32_Word * restrict ndx,
 			struct elfSectionStrtab * restrict context,
 			Elf32_Word n, const char * restrict f, ...);
 
