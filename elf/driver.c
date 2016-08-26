@@ -26,7 +26,6 @@
 #include "../noisy/lib.h"
 #include "../overflow.h"
 #include "../readwhole.h"
-#include "section/load.h"
 #include "section/null.h"
 #include "section/strtab.h"
 #include "section/symtab.h"
@@ -70,7 +69,8 @@ int elfInit(struct elf * restrict context, const char * restrict path)
 		if (result != 0)
 			free(context->source.buffer);
 
-		context->shnum = 0;
+		for (int ndx = 0; ndx < ELF_SH_NUM; ndx++)
+			context->sections[ndx] = NULL;
 	}
 
 	return result;
@@ -80,22 +80,12 @@ int elfInit(struct elf * restrict context, const char * restrict path)
 int elfMakeSections(struct elf * restrict context,
 		    const char * restrict infoPath)
 {
-	enum {
-		ELF_SH_NULL,
-		ELF_SH_LOAD,
-		ELF_SH_SHSTRTAB,
-		ELF_SH_SYMTAB,
-		ELF_SH_STRTAB,
-		ELF_SH_NUM
-	};
-
 #define NAME(string) { string, sizeof(string) }
 	static struct {
 		const char *string;
 		size_t size;
 	} names[ELF_SH_NUM] = {
 		[ELF_SH_NULL] = NAME(""),
-		[ELF_SH_LOAD] = NAME("load"),
 		[ELF_SH_SHSTRTAB] = NAME(".shstrtab"),
 		[ELF_SH_SYMTAB] = NAME(".symtab"),
 		[ELF_SH_STRTAB] = NAME(".strtab")
@@ -103,100 +93,60 @@ int elfMakeSections(struct elf * restrict context,
 	struct elfSectionStrtab shstrtab;
 	struct elfSectionStrtab strtab;
 	Elf32_Word shstrtabNames[ELF_SH_NUM];
-	Elf32_Word num;
 	int result;
-
-	const Elf32_Word loads = elfSectionLoadCount(&context->source);
-
-	if (waddOverflow(loads, 4, &num))
-		goto failTooMany;
-
-	Elf32_Word shsize;
-	if (wmulOverflow(num, sizeof(*context->shdrs), &shsize))
-		goto failTooMany;
-
-	Elf32_Word tabSize;
-	if (wmulOverflow(num, sizeof(*context->sections), &tabSize))
-		goto failTooMany;
-
-	Elf32_Shdr * const shdrs = noisyMalloc(shsize);
-	if (shdrs == NULL)
-		goto failShdrs;
-
-	void ** const sections = noisyMalloc(tabSize);
-	if (sections == NULL)
-		goto failSections;
 
 	elfSectionStrtabInit(&shstrtab);
 
-	for (unsigned int index = 0; index < ELF_SH_NUM; index++) {
-		result = elfSectionStrtabAdd(&shstrtabNames[index], &shstrtab,
-					     names[index].size,
-					     names[index].string);
+	for (int ndx = 0; ndx < ELF_SH_NUM; ndx++) {
+		result = elfSectionStrtabAdd(&shstrtabNames[ndx], &shstrtab,
+					     names[ndx].size,
+					     names[ndx].string);
 		if (result < 0)
 			goto failShstrtab;
 	}
 
-	Elf32_Word ndx = 0;
-
 	elfSectionNullMake(shstrtabNames[ELF_SH_NULL],
-			   shdrs + ndx, sections + ndx);
+			   context->shdrs + ELF_SH_NULL,
+			   context->sections + ELF_SH_NULL);
 
-	ndx++;
-	assert(ndx == ELF_LOADNDX);
-	elfSectionLoadMake(&context->source, shstrtabNames[ELF_SH_LOAD],
-			   shdrs + ndx, sections + ndx);
-
-	ndx += loads;
 	elfSectionStrtabFinalize(&shstrtab, shstrtabNames[ELF_SH_SHSTRTAB],
-				 context->source.size + shsize,
-				 shdrs + ndx, sections + ndx);
-	context->shstrndx = ndx;
+				 context->source.size + sizeof(context->shdrs),
+				 context->shdrs + ELF_SH_SHSTRTAB,
+				 context->sections + ELF_SH_SHSTRTAB);
 
 	elfSectionStrtabInit(&strtab);
 
 	SceKernelModuleInfo * const info = readInfo(infoPath);
 	if (info == NULL)
-		return -1;
+		goto failInfo;
 
-	ndx++;
-	result = elfSectionSymtabMake(&context->source, info, &strtab, ndx + 1,
+	result = elfSectionSymtabMake(&context->source, info, &strtab,
+				      ELF_SH_STRTAB,
 				      shstrtabNames[ELF_SH_SYMTAB],
-				      shdrs[ndx - 1].sh_offset
-				      + shdrs[ndx - 1].sh_size,
-				      shdrs + ndx, sections + ndx);
+				      context->shdrs[ELF_SH_SHSTRTAB].sh_offset
+				      + context->shdrs[ELF_SH_SHSTRTAB].sh_size,
+				      context->shdrs + ELF_SH_SYMTAB,
+				      context->sections + ELF_SH_SYMTAB);
 	if (result != 0)
 		goto failSymtab;
 
 	free(info);
 
-	ndx++;
 	elfSectionStrtabFinalize(&strtab,
 				 shstrtabNames[ELF_SH_STRTAB],
-				 shdrs[ndx - 1].sh_offset
-				 + shdrs[ndx - 1].sh_size,
-				 shdrs + ndx, sections + ndx);
-
-	context->shdrs = shdrs;
-	context->sections = sections;
-	context->shnum = ndx + 1;
+				 context->shdrs[ELF_SH_SYMTAB].sh_offset
+				 + context->shdrs[ELF_SH_SYMTAB].sh_size,
+				 context->shdrs + ELF_SH_STRTAB,
+				 context->sections + ELF_SH_STRTAB);
 
 	return result;
 
-failTooMany:
-	fputs("too many sections", stderr);
-	return -1;
-
-failSections:
-	free(shdrs);
-failShdrs:
-	return -1;
-
 failSymtab:
 	free(info);
+failInfo:
+	elfSectionStrtabDispose(&strtab);
 failShstrtab:
-	free(sections);
-	free(shdrs);
+	elfSectionStrtabDispose(&shstrtab);
 	return result;
 }
 
@@ -211,8 +161,8 @@ int elfWrite(struct elf *context)
 
 	ehdr.e_shoff = context->source.size;
 	ehdr.e_shentsize = sizeof(Elf32_Shdr);
-	ehdr.e_shnum = context->shnum;
-	ehdr.e_shstrndx = context->shstrndx;
+	ehdr.e_shnum = ELF_SH_NUM;
+	ehdr.e_shstrndx = ELF_SH_SHSTRTAB;
 
 	struct noisyFile *noisyStdout = noisyGetStdout();
 	if (noisyStdout == NULL)
@@ -225,28 +175,28 @@ int elfWrite(struct elf *context)
 		       context->source.size - sizeof(ehdr), 1, noisyStdout) != 1)
 		goto fail;
 
-	const Elf32_Word shsize = context->shnum * sizeof(*context->shdrs);
-	if (noisyFwrite(context->shdrs, shsize, 1, noisyStdout) != 1)
+	if (noisyFwrite(context->shdrs, sizeof(context->shdrs), 1, noisyStdout)
+	    != 1)
 		goto fail;
 
-	Elf32_Off offset = context->source.size + shsize;
-	for (Elf32_Word index = 0; index < context->shnum; index++) {
-		if (context->sections[index] == NULL)
+	Elf32_Off offset = context->source.size + sizeof(context->shdrs);
+	for (int ndx = 0; ndx < ELF_SH_NUM; ndx++) {
+		if (context->sections[ndx] == NULL)
 			continue;
 
-		while (offset < context->shdrs[index].sh_offset) {
+		while (offset < context->shdrs[ndx].sh_offset) {
 			if (noisyFputc(0, noisyStdout) != 0)
 				goto fail;
 
 			offset++;
 		}
 
-		if (noisyFwrite(context->sections[index],
-				context->shdrs[index].sh_size, 1, noisyStdout)
+		if (noisyFwrite(context->sections[ndx],
+				context->shdrs[ndx].sh_size, 1, noisyStdout)
 		    != 1)
 			goto fail;
 
-		offset += context->shdrs[index].sh_size;
+		offset += context->shdrs[ndx].sh_size;
 	}
 
 	noisyFclose(noisyStdout);
@@ -260,13 +210,8 @@ failInit:
 
 void elfDeinit(const struct elf * restrict context)
 {
-	if (context->shnum > 0) {
-		for (Elf32_Word ndx = 0; ndx < context->shnum; ndx++)
-			free(context->sections[ndx]);
-
-		free(context->shdrs);
-		free(context->sections);
-	}
+	for (Elf32_Word ndx = 0; ndx < ELF_SH_NUM; ndx++)
+		free(context->sections[ndx]);
 
 	free(context->source.buffer);
 }

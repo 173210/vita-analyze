@@ -244,36 +244,3 @@ const void *elfImageVaddrToPtr(const struct elfImage * restrict image,
 	const Elf32_Off offset = elfImageVaddrToOff(image, vaddr, size, max);
 	return offset > 0 ? elfImageOffToPtr(image, offset) : NULL;
 }
-
-int elfImageGetPhndxByVaddr(const struct elfImage * restrict image,
-			    Elf32_Addr vaddr, Elf32_Word size,
-			    Elf32_Word * restrict result,
-			    Elf32_Word * restrict max)
-{
-	const void * const buffer = image->buffer;
-	const Elf32_Ehdr * const ehdr = buffer;
-	const Elf32_Phdr * const phdrs
-		= (void *)((char *)buffer + ehdr->e_phoff);
-
-	for (Elf32_Word ndx = 0; ndx < ehdr->e_phnum; ndx++) {
-		Elf32_Word offset;
-		if (wsubOverflow(vaddr, phdrs[ndx].p_vaddr, &offset))
-			continue;
-
-		Elf32_Word localMax;
-		if (wsubOverflow(phdrs[ndx].p_filesz, offset, &localMax))
-			continue;
-
-		if (localMax < size)
-			continue;
-
-		*result = ndx;
-
-		if (max != NULL)
-			*max = localMax;
-
-		return 0;
-	}
-
-	return -1;
-}

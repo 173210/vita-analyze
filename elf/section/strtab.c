@@ -56,6 +56,11 @@ int elfSectionStrtabAdd(Elf32_Word * restrict index,
 	return result;
 }
 
+void elfSectionStrtabDispose(const struct elfSectionStrtab * restrict context)
+{
+	free(context->buffer);
+}
+
 void elfSectionStrtabFinalize(const struct elfSectionStrtab * restrict context,
 			      Elf32_Word name, Elf32_Off offset,
 			      Elf32_Shdr * restrict shdr,
