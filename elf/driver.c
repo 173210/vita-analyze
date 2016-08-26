@@ -206,8 +206,11 @@ int elfWrite(struct elf *context)
 
 	memcpy(&ehdr, context->source.buffer, sizeof(ehdr));
 
-	/* BFD doesn't accept sections if e_type is ET_CORE. */
-	ehdr.e_type = ET_NONE;
+	/* BFD doesn't accept sections if e_type is ET_CORE.
+	   According to "SYSTEM V APPLICATION BINARY INTERFACE" edition 4.1,
+	   the type should be executable or shared if symbol values have virtual
+	   address. */
+	ehdr.e_type = ET_EXEC;
 
 	ehdr.e_shoff = context->source.size;
 	ehdr.e_shentsize = sizeof(Elf32_Shdr);
