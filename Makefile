@@ -9,7 +9,7 @@ CFLAGS = -std=c11 -Og -Wall -Wextra -pedantic -pie -fPIC -g -flto #-fstack-prote
 LDFLAGS = $(CFLAGS) $(shell pkg-config jansson --libs)
 
 vita-analyze: $(OBJS)
-	$(LINK.o) $^ $(OUTPUT_OPTION)
+	$(LINK.o) $^ $(LDFLAGS) $(OUTPUT_OPTION)
 
 clean:
 	$(RM) vita-analyze $(OBJS)
