@@ -4,9 +4,9 @@ OBJS := elf/section/load.o elf/section/null.o elf/section/strtab.o	\
 	vita-import/vita-import.o vita-import/vita-import-parse.o	\
 	main.o readwhole.o
 
-CFLAGS = -std=c11 -Og -Wall -Wextra -pedantic -pie -fPIC -g -flto #-fstack-protector-all -fno-sanitize-recover -fsanitize=address $(shell pkg-config jansson --cflags) #-fsanitize=address,undefined
+CFLAGS = -std=c11 -O2 -Wall -Wextra -pedantic -pie -fPIC -flto -fstack-protector-all -fno-sanitize-recover $(shell pkg-config jansson --cflags) #-fsanitize=address,undefined
 
-LDFLAGS = $(CFLAGS)
+LDFLAGS = $(CFLAGS) -fwhole-program
 
 vita-analyze: $(OBJS)
 	$(LINK.o) $^ $(shell pkg-config jansson --libs) $(OUTPUT_OPTION)
