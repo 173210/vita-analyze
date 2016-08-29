@@ -6,10 +6,10 @@ OBJS := elf/section/load.o elf/section/null.o elf/section/strtab.o	\
 
 CFLAGS = -std=c11 -Og -Wall -Wextra -pedantic -pie -fPIC -g -flto #-fstack-protector-all -fno-sanitize-recover -fsanitize=address $(shell pkg-config jansson --cflags) #-fsanitize=address,undefined
 
-LDFLAGS = $(CFLAGS) $(shell pkg-config jansson --libs)
+LDFLAGS = $(CFLAGS)
 
 vita-analyze: $(OBJS)
-	$(LINK.o) $^ $(OUTPUT_OPTION)
+	$(LINK.o) $^ $(shell pkg-config jansson --libs) $(OUTPUT_OPTION)
 
 clean:
 	$(RM) vita-analyze $(OBJS)
