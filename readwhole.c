@@ -15,37 +15,32 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <fcntl.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "noisy/io.h"
+#include "noisy/fcntl.h"
 #include "noisy/lib.h"
 #include "readwhole.h"
 
 void *readWhole(const char * restrict path, size_t * restrict size)
 {
-	struct noisyFile * const file = noisyFopen(path, "rb");
+	struct noisyFile * const file = noisyOpen(path, O_RDONLY);
 	if (file == NULL)
 		goto failOpen;
 
-	if (noisyFseek(file, 0, SEEK_END) != 0)
-		goto failSeek;
-
-	const long localSize = noisyFtell(file);
+	off_t localSize = noisyLseek(file, 0, SEEK_END);
 	if (localSize < 0)
-		goto failTell;
-
-	if (noisyFseek(file, 0, SEEK_SET) != 0)
 		goto failSeek;
 
 	void * const buffer = noisyMalloc(localSize);
 	if (buffer == NULL)
 		goto failMalloc;
 
-	if (noisyFread(buffer, localSize, 1, file) != 1)
+	if (noisyPread(file, buffer, localSize, 0) != localSize)
 		goto failRead;
 
-	noisyFclose(file);
+	noisyClose(file);
 
 	if (size != NULL)
 		*size = localSize;
@@ -55,9 +50,8 @@ void *readWhole(const char * restrict path, size_t * restrict size)
 failRead:
 	free(buffer);
 failMalloc:
-failTell:
 failSeek:
-	noisyFclose(file);
+	noisyClose(file);
 failOpen:
 	return NULL;
 }

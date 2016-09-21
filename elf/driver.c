@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../noisy/io.h"
+#include "../noisy/fcntl.h"
 #include "../noisy/lib.h"
 #include "../overflow.h"
 #include "../readwhole.h"
@@ -217,19 +217,21 @@ int elfWrite(struct elf *context)
 	ehdr.e_shnum = context->shnum;
 	ehdr.e_shstrndx = context->shstrndx;
 
-	struct noisyFile *noisyStdout = noisyGetStdout();
+	struct noisyFile * const noisyStdout = noisyGetStdout();
 	if (noisyStdout == NULL)
 		goto failInit;
 
-	if (noisyFwrite(&ehdr, sizeof(ehdr), 1, noisyStdout) != 1)
+	if (noisyWrite(noisyStdout, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
 		goto fail;
 
-	if (noisyFwrite((char *)context->source.buffer + sizeof(ehdr),
-		       context->source.size - sizeof(ehdr), 1, noisyStdout) != 1)
+	const ssize_t left = context->source.size - sizeof(ehdr);
+	if (noisyWrite(noisyStdout,
+		       (char *)context->source.buffer + sizeof(ehdr), left)
+	    != left)
 		goto fail;
 
 	const Elf32_Word shsize = context->shnum * sizeof(*context->shdrs);
-	if (noisyFwrite(context->shdrs, shsize, 1, noisyStdout) != 1)
+	if (noisyWrite(noisyStdout, context->shdrs, shsize) != 1)
 		goto fail;
 
 	Elf32_Off offset = context->source.size + shsize;
@@ -238,25 +240,28 @@ int elfWrite(struct elf *context)
 			continue;
 
 		while (offset < context->shdrs[ndx].sh_offset) {
-			if (noisyFputc(0, noisyStdout) != 0)
+			static const char padding = 0;
+			if (noisyWrite(noisyStdout, &padding, sizeof(padding))
+			    != sizeof(padding))
 				goto fail;
 
-			offset++;
+			offset += sizeof(padding);
 		}
 
-		if (noisyFwrite(context->sections[ndx],
-				context->shdrs[ndx].sh_size, 1, noisyStdout)
+		if (noisyWrite(noisyStdout, context->sections[ndx],
+				context->shdrs[ndx].sh_size)
 		    != 1)
 			goto fail;
 
 		offset += context->shdrs[ndx].sh_size;
 	}
 
-	noisyFclose(noisyStdout);
+	noisyClose(noisyStdout);
 	return 0;
 
 fail:
-	noisyFclose(noisyStdout);
+	if (noisyStdout != NULL)
+		noisyClose(noisyStdout);
 failInit:
 	return -1;
 }

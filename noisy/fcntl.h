@@ -15,25 +15,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NOISY_IO_H
-#define NOISY_IO_H
+#ifndef NOISY_FCNTL_H
+#define NOISY_FCNTL_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 struct noisyFile;
-extern const struct noisyFile noisyStdout;
 
-struct noisyFile *noisyGetStdout();
-struct noisyFile *noisyFopen(const char * restrict path,
-			 const char * restrict mode);
+struct noisyFile *noisyGetStdout(void);
+struct noisyFile *noisyOpen(const char * restrict path, int flag);
 
-int noisyFclose(struct noisyFile * restrict context);
-int noisyFseek(const struct noisyFile * restrict context, long offset, int whence);
-long noisyFtell(const struct noisyFile * restrict context);
-size_t noisyFread(void * restrict buffer, size_t size, size_t number,
-		 const struct noisyFile * restrict context);
-size_t noisyFwrite(const void * restrict buffer, size_t size, size_t number,
-	const struct noisyFile * restrict context);
-int noisyFputc(int c, const struct noisyFile * restrict context);
+int noisyClose(struct noisyFile * restrict context);
+
+off_t noisyLseek(const struct noisyFile * restrict context,
+		 off_t offset, int whence);
+ssize_t noisyPread(const struct noisyFile * restrict context,
+		   void * restrict buffer, size_t size, off_t offset);
+ssize_t noisyRead(const struct noisyFile * restrict context,
+		  void * restrict buffer, size_t size);
+ssize_t noisyWrite(const struct noisyFile * restrict context,
+		   const void * restrict buffer, size_t size);
 
 #endif
