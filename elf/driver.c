@@ -221,6 +221,11 @@ int elfWrite(struct elf *context)
 	if (noisyStdout == NULL)
 		goto failInit;
 
+	if (noisyIsatty(noisyStdout)) {
+		fputs("stdout is tty. refusing to output ELF.\n", stderr);
+		goto fail;
+	}
+
 	if (noisyWrite(noisyStdout, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
 		goto fail;
 

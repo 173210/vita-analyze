@@ -24,6 +24,9 @@
 struct noisyFile;
 
 struct noisyFile *noisyGetStdout(void);
+
+int noisyIsatty(const struct noisyFile * restrict context);
+
 struct noisyFile *noisyOpen(const char * restrict path, int flag);
 
 int noisyClose(struct noisyFile * restrict context);

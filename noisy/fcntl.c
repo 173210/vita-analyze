@@ -40,6 +40,11 @@ struct noisyFile *noisyGetStdout()
 	return context;
 }
 
+int noisyIsatty(const struct noisyFile * restrict context)
+{
+	return isatty(context->fileno);
+}
+
 struct noisyFile *noisyOpen(const char * restrict path, int flag)
 {
 	struct noisyFile * const context = noisyMalloc(sizeof(*context));
