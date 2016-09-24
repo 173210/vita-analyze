@@ -255,7 +255,7 @@ int elfWrite(struct elf *context)
 
 		if (noisyWrite(noisyStdout, context->sections[ndx],
 			       context->shdrs[ndx].sh_size)
-		    != 1)
+		    != context->shdrs[ndx].sh_size)
 			goto fail;
 
 		offset += context->shdrs[ndx].sh_size;
