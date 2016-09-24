@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -160,18 +161,22 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 	     cursor != exp->btm;
 	     cursor++) {
 		const Elf32_Word total = cursor->nFuncs + cursor->nVars;
+		Elf32_Word maximum;
 
 		if (cursor->name == 0) {
 			name = "null";
 			nameSize = sizeof("null");
 		} else {
 			name = elfImageVaddrToPtr(image, cursor->name, 0,
-						  &nameSize);
+						  &maximum);
 			if (name == NULL)
 				goto failNamePtr;
 
-			if (memchr(name, 0, nameSize) == NULL)
+			nameSize = strnlen(name, maximum);
+			if (nameSize >= maximum)
 				goto failNameTooLong;
+
+			nameSize++;
 		}
 
 		vita_imports_module_t *module;
@@ -460,13 +465,18 @@ static int impSymMake(const struct elfImageImp * restrict imp,
 			name = "null";
 			nameSize = sizeof("null");
 		} else {
+			Elf32_Word maximum;
+
 			name = elfImageVaddrToPtr(image, cursor->name, 0,
-						  &nameSize);
+						  &maximum);
 			if (name == NULL)
 				goto failNamePtr;
 
-			if (memchr(name, 0, nameSize) == NULL)
+			nameSize = strnlen(name, maximum);
+			if (nameSize >= maximum)
 				goto failNameTooLong;
+
+			nameSize++;
 		}
 
 		vita_imports_module_t * const module
