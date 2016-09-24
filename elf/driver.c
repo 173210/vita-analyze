@@ -236,7 +236,7 @@ int elfWrite(struct elf *context)
 		goto fail;
 
 	const Elf32_Word shsize = context->shnum * sizeof(*context->shdrs);
-	if (noisyWrite(noisyStdout, context->shdrs, shsize) != 1)
+	if (noisyWrite(noisyStdout, context->shdrs, shsize) != shsize)
 		goto fail;
 
 	Elf32_Off offset = context->source.size + shsize;
