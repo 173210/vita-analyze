@@ -125,20 +125,6 @@ static int infoSymMake(Elf32_Addr vaddr, Elf32_Sym * restrict sym,
 	return 0;
 }
 
-static Elf32_Word kernelInfoSymSumUp(const SceKernelModuleInfo *kernelInfo)
-{
-	Elf32_Word sum;
-
-	sum = 0;
-	if (kernelInfo->module_start != 0)
-		sum++;
-
-	if (kernelInfo->module_stop != 0)
-		sum++;
-
-	return sum;
-}
-
 static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		      const struct elfImageExp * restrict exp,
 		      const struct elfImage * restrict image,
@@ -146,6 +132,7 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		      Elf32_Sym * restrict syms,
 		      struct elfSectionStrtab * restrict strtab)
 {
+	static const char nullName[] = "null";
 	const char *name;
 	Elf32_Word nameSize;
 	int result;
@@ -164,8 +151,8 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		Elf32_Word maximum;
 
 		if (cursor->name == 0) {
-			name = "null";
-			nameSize = sizeof("null");
+			name = nullName;
+			nameSize = sizeof(nullName);
 		} else {
 			name = elfImageVaddrToPtr(image, cursor->name, 0,
 						  &maximum);
@@ -206,23 +193,50 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		for (Elf32_Half count = 0;
 		     count < cursor->nFuncs;
 		     count++) {
-			const vita_imports_stub_t *stub;
-			if (module == NULL) {
-				stub = NULL;
-			} else {
-				stub = vita_imports_find_function(module, *nid);
-				if (stub == NULL)
+			const char *entryName = NULL;
+			Elf32_Word entryNameSize;
+			if (name == nullName) {
+#define ENTRY(nid, name) { nid, sizeof(name), name }
+				static const struct {
+					Elf32_Word nid;
+					size_t size;
+					const char name[14];
+				} funcs[] = {
+					ENTRY(0x79F8E492, "module_stop"),
+					ENTRY(0x913482A9, "module_exit"),
+					ENTRY(0x935CD196, "module_start")
+				};
+#undef ENTRY
+
+				for (unsigned int i = 0;
+				     i < sizeof(funcs) / sizeof(*funcs);
+				     i++) {
+					if (funcs[i].nid == *nid) {
+						entryName = funcs[i].name;
+						entryNameSize = funcs[i].size;
+						break;
+					}
+				}
+			} else if (module != NULL) {
+				const vita_imports_stub_t * const stub
+					= vita_imports_find_function(
+						module, *nid);
+				if (stub == NULL) {
 					fprintf(stderr, "warning: function NID 0x%08X not found\n",
 						*nid);
+				} else {
+					entryName = stub->name;
+					entryNameSize = strlen(stub->name) + 1;
+				}
 			}
 
-			result = stub == NULL ?
+			result = entryName == NULL ?
 				elfSectionStrtabAdd(
 					&syms->st_name, strtab, nameSize + 9,
 					"%s_%08X", name, *nid) :
 				elfSectionStrtabAdd(
 					&syms->st_name, strtab,
-					strlen(stub->name) + 1, stub->name);
+					entryNameSize, entryName);
 			if (result < 0)
 				goto failStrtab;
 
@@ -247,23 +261,33 @@ static int expSymMake(const SceKernelModuleInfo * restrict kernelInfo,
 		for (Elf32_Half count = 0;
 		     count < cursor->nVars;
 		     count++) {
-			const vita_imports_stub_t *stub;
-			if (module == NULL) {
-				stub = NULL;
-			} else {
-				stub = vita_imports_find_variable(module, *nid);
-				if (stub == NULL)
+			const char *entryName = NULL;
+			Elf32_Word entryNameSize;
+			if (name == nullName) {
+				if (*nid == 0x6C2224BA) {
+					entryName = "module_info";
+					entryNameSize = sizeof("module_info");
+				}
+			} else if (module != NULL) {
+				const vita_imports_stub_t * const stub
+					= vita_imports_find_variable(
+						module, *nid);
+				if (stub == NULL) {
 					fprintf(stderr, "warning: variable NID 0x%08X not found\n",
 						*nid);
+				} else {
+					entryName = stub->name;
+					entryNameSize = strlen(stub->name) + 1;
+				}
 			}
 
-			result = stub == NULL ?
+			result = entryName == NULL ?
 				elfSectionStrtabAdd(
 					&syms->st_name, strtab, nameSize + 9,
 					"%s_%08X", name, *nid) :
 				elfSectionStrtabAdd(
 					&syms->st_name, strtab,
-					strlen(stub->name) + 1, stub->name);
+					entryNameSize, entryName);
 			if (result < 0)
 				goto failStrtab;
 
@@ -313,60 +337,6 @@ failEntriesPtr:
 
 failStrtab:
 	return result;
-}
-
-static int kernelInfoSymMake(const struct elfImage * restrict image,
-			     const SceKernelModuleInfo * restrict kernelInfo,
-			     Elf32_Sym * restrict syms,
-			     struct elfSectionStrtab * restrict strtab)
-{
-	int result;
-
-	if (kernelInfo->module_start != 0) {
-		result = elfSectionStrtabAdd(
-			&syms->st_name, strtab,
-			sizeof("module_start"), "module_start");
-		if (result < 0)
-			return result;
-
-		syms->st_value = kernelInfo->module_start;
-		syms->st_size = 0;
-		syms->st_info = ELF32_ST_INFO(
-			STB_GLOBAL, guessSttFunc(kernelInfo->module_start));
-		syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-
-		Elf32_Word phndx;
-		if (elfImageGetPhndxByVaddr(image, kernelInfo->module_start, 0,
-					    &phndx, NULL))
-			syms->st_shndx = SHN_ABS;
-		else
-			syms->st_shndx = ELF_LOADNDX + phndx;
-
-		syms++;
-	}
-
-	if (kernelInfo->module_stop != 0) {
-		result = elfSectionStrtabAdd(
-			&syms->st_name, strtab,
-			sizeof("module_stop"), "module_stop");
-		if (result < 0)
-			return result;
-
-		syms->st_value = kernelInfo->module_stop;
-		syms->st_size = 0;
-		syms->st_info = ELF32_ST_INFO(
-			STB_GLOBAL, guessSttFunc(kernelInfo->module_stop));
-		syms->st_other = ELF32_ST_VISIBILITY(STV_DEFAULT);
-
-		Elf32_Word phndx;
-		if (elfImageGetPhndxByVaddr(image, kernelInfo->module_stop, 0,
-					    &phndx, NULL))
-			syms->st_shndx = SHN_ABS;
-		else
-			syms->st_shndx = ELF_LOADNDX + phndx;
-	}
-
-	return 0;
 }
 
 static int makeTable(const struct elfImage * restrict image,
@@ -544,8 +514,6 @@ int elfSectionSymtabMake(const struct elfImage * restrict image,
 	if (result != 0)
 		goto failNoInfo;
 
-	const Elf32_Word kernelInfoSymSum = kernelInfoSymSumUp(kernelInfo);
-
 	const Elf32_Sword expSum = expSymSumUp(&exp, image);
 	if (expSum < 0)
 		goto failNoExp;
@@ -564,10 +532,7 @@ int elfSectionSymtabMake(const struct elfImage * restrict image,
 	shdr->sh_entsize = sizeof(Elf32_Sym);
 
 	Elf32_Word nSyms;
-	if (waddOverflow(2, kernelInfoSymSum, &nSyms))
-		goto failTooMany;
-
-	if (waddOverflow(nSyms, expSum, &nSyms))
+	if (waddOverflow(2, expSum, &nSyms))
 		goto failTooMany;
 
 	if (waddOverflow(nSyms, impSum, &nSyms))
@@ -600,12 +565,6 @@ int elfSectionSymtabMake(const struct elfImage * restrict image,
 		goto failSym;
 
 	cursor++;
-	result = kernelInfoSymMake(image, kernelInfo, cursor, strtab);
-	if (result < 0)
-		goto failSym;
-
-	cursor += kernelInfoSymSum;
-
 	vita_imports_t * const imports = vitaImportsLoad();
 	if (imports == NULL)
 		goto failSym;
